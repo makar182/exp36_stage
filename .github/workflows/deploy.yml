@@ -27,24 +27,9 @@ jobs:
             exit 1
           fi
 
-#      - name: Install SSH client and rsync
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install -y openssh-client rsync
-#
-#      - name: Configure SSH key
-#        run: |
-#          sudo apt-get install -y ssh rsync
-#          echo "$DEPLOY_SSH_KEY" > deploy_key.pem
-#          chmod 600 deploy_key.pem
-#          ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "mkdir -p ${{ env.DEPLOY_DIRECTORY }}"
-#          rsync -avz -e 'ssh -i deploy_key.pem -o StrictHostKeyChecking=no' --exclude='.git' ./ ${{ env.HOST }}:${{ env.DEPLOY_DIRECTORY }}
-#        env:
-#          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-
       - name: Deploy to VM
         run: |
-          sudo apt-get install -y ssh rsync
+          sudo apt-get install -y ssh rsync docker-compose-plugin
           printf '%s\n' "$DEPLOY_SSH_KEY" > deploy_key.pem
           chmod 600 deploy_key.pem
           ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "mkdir -p ${{ env.DEPLOY_DIRECTORY }}"
@@ -52,20 +37,13 @@ jobs:
         env:
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
 
-#      - name: Copy project files to server
-#        run: |
-#          rsync -az --delete \
-#            -e 'ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no' \
-#            --exclude='.git' \
-#            ./ ${{ env.HOST }}:${{ env.DEPLOY_DIRECTORY }}
-
       - name: Apply docker compose deployment
         run: |
           ssh -i deploy_key.pem -o StrictHostKeyChecking=no ${{ env.HOST }} "\
             set -euo pipefail; \
             cd ${{ env.DEPLOY_DIRECTORY }}; \
             docker compose pull || true; \
-            docker compose down; \
+            docker compose down --remove-orphans; \
             docker compose up -d --build; \
           "
 
