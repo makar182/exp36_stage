@@ -11,7 +11,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     env:
-      HOST: root@example.com
+      HOST: root@79.143.30.146
       DEPLOY_DIRECTORY: /root/apps/exp36_stage
     steps:
       - name: Checkout repository
