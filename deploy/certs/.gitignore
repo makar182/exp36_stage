@@ -1,0 +1,3 @@
+*.pem
+!ssl-dhparams.pem
+!README.md
