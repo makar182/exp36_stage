@@ -1,0 +1,64 @@
+name: Deploy via Docker Compose
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (tag or branch) to deploy'
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HOST: root@example.com
+      DEPLOY_DIRECTORY: /root/apps/exp36_stage
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Verify git ref exists
+        run: |
+          git fetch --all --tags --prune
+          if ! git rev-parse --verify --quiet "${{ github.event.inputs.ref }}" > /dev/null; then
+            echo "error: ref '${{ github.event.inputs.ref }}' not found"
+            exit 1
+          fi
+
+      - name: Install SSH client and rsync
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openssh-client rsync
+
+      - name: Configure SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          touch ~/.ssh/known_hosts
+
+      - name: Copy project files to server
+        run: |
+          rsync -az --delete \
+            -e 'ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no' \
+            --exclude='.git' \
+            ./ ${{ env.HOST }}:${{ env.DEPLOY_DIRECTORY }}
+
+      - name: Apply docker compose deployment
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ env.HOST }} "\
+            set -euo pipefail; \
+            cd ${{ env.DEPLOY_DIRECTORY }}; \
+            docker compose pull || true; \
+            docker compose down --remove-orphans; \
+            docker compose up -d --build; \
+          "
+
+      - name: Clean up SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
