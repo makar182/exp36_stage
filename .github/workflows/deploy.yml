@@ -1,6 +1,9 @@
 name: Deploy via Docker Compose
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       ref:
@@ -14,16 +17,33 @@ jobs:
       HOST: root@79.143.30.146
       DEPLOY_DIRECTORY: /root/apps/exp36_stage
     steps:
+      - name: Determine ref to deploy
+        id: deployment_ref
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ref="${{ github.event.inputs.ref }}"
+            if [ -z "$ref" ]; then
+              echo "error: ref input is required"
+              exit 1
+            fi
+          else
+            ref="${{ github.sha }}"
+          fi
+
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref }}
+          ref: ${{ steps.deployment_ref.outputs.ref }}
+          fetch-depth: 0
 
       - name: Verify git ref exists
+        if: github.event_name == 'workflow_dispatch'
         run: |
           git fetch --all --tags --prune
-          if ! git rev-parse --verify --quiet "${{ github.event.inputs.ref }}" > /dev/null; then
-            echo "error: ref '${{ github.event.inputs.ref }}' not found"
+          if ! git rev-parse --verify --quiet "${{ steps.deployment_ref.outputs.ref }}" > /dev/null; then
+            echo "error: ref '${{ steps.deployment_ref.outputs.ref }}' not found"
             exit 1
           fi
 
@@ -50,4 +70,4 @@ jobs:
       - name: Clean up SSH key
         if: always()
         run: |
-          rm -f ~/.ssh/deploy_key
+          rm -f deploy_key.pem
