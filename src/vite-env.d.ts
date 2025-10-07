@@ -14,6 +14,8 @@ declare global {
   interface TelegramWebApp {
     themeParams?: TelegramThemeParams
     ready?: () => void
+    onEvent?: (event: string, callback: (params?: TelegramThemeParams) => void) => void
+    offEvent?: (event: string, callback: (params?: TelegramThemeParams) => void) => void
     [key: string]: unknown
   }
 
