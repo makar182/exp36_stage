@@ -1,3 +1,5 @@
+import type { ShortLink } from '@/entities/short-link'
+
 const KNOWN_LIST_ENDPOINTS = [
   '/api/v1/urls',
   '/api/v1/short-urls',
@@ -6,7 +8,7 @@ const KNOWN_LIST_ENDPOINTS = [
   '/api/links',
   '/urls',
   '/links',
-];
+]
 
 const KNOWN_CREATE_ENDPOINTS = [
   '/api/v1/urls',
@@ -16,7 +18,7 @@ const KNOWN_CREATE_ENDPOINTS = [
   '/urls',
   '/links',
   '/shorten',
-];
+]
 
 const KNOWN_DELETE_PATTERNS = [
   (id: string) => `/api/v1/urls/${id}`,
@@ -26,51 +28,51 @@ const KNOWN_DELETE_PATTERNS = [
   (id: string) => `/urls/${id}`,
   (id: string) => `/links/${id}`,
   (id: string) => `/url/${id}`,
-];
+]
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '');
-const SHORT_BASE_URL = (import.meta.env.VITE_SHORT_BASE_URL ?? '').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
+const SHORT_BASE_URL = (import.meta.env.VITE_SHORT_BASE_URL ?? '').replace(/\/$/, '')
 
-type FetchMethod = 'GET' | 'POST' | 'DELETE';
+type FetchMethod = 'GET' | 'POST' | 'DELETE'
 
 type FetchResult<T> = {
-  data: T;
-  endpoint: string;
-};
+  data: T
+  endpoint: string
+}
 
-const endpointCache = new Map<string, string>();
+const endpointCache = new Map<string, string>()
 
 const buildUrl = (path: string) => {
   if (!API_BASE_URL) {
-    return path;
+    return path
   }
 
   if (!path.startsWith('/')) {
-    return `${API_BASE_URL}/${path}`;
+    return `${API_BASE_URL}/${path}`
   }
 
-  return `${API_BASE_URL}${path}`;
-};
+  return `${API_BASE_URL}${path}`
+}
 
 const pickString = (obj: Record<string, unknown>, keys: string[]): string | undefined => {
   for (const key of keys) {
-    const value = obj[key];
+    const value = obj[key]
     if (typeof value === 'string' && value.trim().length > 0) {
-      return value;
+      return value
     }
   }
-  return undefined;
-};
+  return undefined
+}
 
 const pickNumber = (obj: Record<string, unknown>, keys: string[]): number | undefined => {
   for (const key of keys) {
-    const value = obj[key];
+    const value = obj[key]
     if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
+      return value
     }
   }
-  return undefined;
-};
+  return undefined
+}
 
 const tryFetch = async <T>(
   method: FetchMethod,
@@ -78,23 +80,23 @@ const tryFetch = async <T>(
   body?: unknown,
   preferredKey?: string
 ): Promise<FetchResult<T>> => {
-  const cacheKey = `${method}:${preferredKey ?? ''}`;
-  const cachedEndpoint = preferredKey ? endpointCache.get(cacheKey) : undefined;
+  const cacheKey = `${method}:${preferredKey ?? ''}`
+  const cachedEndpoint = preferredKey ? endpointCache.get(cacheKey) : undefined
 
   if (cachedEndpoint) {
     const response = await fetch(buildUrl(cachedEndpoint), {
       method,
       headers: body ? { 'Content-Type': 'application/json' } : undefined,
       body: body ? JSON.stringify(body) : undefined,
-    });
+    })
 
     if (response.ok) {
-      const data = (await response.json()) as T;
-      return { data, endpoint: cachedEndpoint };
+      const data = (await response.json()) as T
+      return { data, endpoint: cachedEndpoint }
     }
   }
 
-  let lastError: unknown;
+  let lastError: unknown
 
   for (const path of paths) {
     try {
@@ -102,58 +104,48 @@ const tryFetch = async <T>(
         method,
         headers: body ? { 'Content-Type': 'application/json' } : undefined,
         body: body ? JSON.stringify(body) : undefined,
-      });
+      })
 
       if (!response.ok) {
         if (response.status >= 500) {
-          throw new Error(`Server responded with ${response.status}`);
+          throw new Error(`Server responded with ${response.status}`)
         }
-        continue;
+        continue
       }
 
-      const data = (await response.json()) as T;
+      const data = (await response.json()) as T
 
       if (preferredKey) {
-        endpointCache.set(cacheKey, path);
+        endpointCache.set(cacheKey, path)
       }
 
-      return { data, endpoint: path };
+      return { data, endpoint: path }
     } catch (error) {
-      lastError = error;
+      lastError = error
     }
   }
 
-  throw lastError ?? new Error('Unable to reach URL shortener service');
-};
-
-export type ShortLink = {
-  id: string;
-  slug: string;
-  originalUrl: string;
-  shortUrl: string;
-  createdAt?: string;
-  expiresAt?: string;
-  clicks?: number;
-};
+  throw lastError ?? new Error('Unable to reach URL shortener service')
+}
 
 const normaliseDate = (input?: string) => {
   if (!input) {
-    return undefined;
+    return undefined
   }
 
-  const numericValue = Number(input);
+  const numericValue = Number(input)
 
   if (!Number.isNaN(numericValue) && numericValue > 0) {
-    return new Date(numericValue).toISOString();
+    return new Date(numericValue).toISOString()
   }
 
-  const timestamp = Date.parse(input);
+  const timestamp = Date.parse(input)
   if (!Number.isNaN(timestamp)) {
-    return new Date(timestamp).toISOString();
+    return new Date(timestamp).toISOString()
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 const extractShortUrl = (
   raw: Record<string, unknown>,
@@ -167,34 +159,34 @@ const extractShortUrl = (
     'short_link',
     'short',
     'shortened',
-  ]);
+  ])
 
   if (direct) {
-    return direct;
+    return direct
   }
 
   if (SHORT_BASE_URL) {
-    return `${SHORT_BASE_URL}/${slug}`;
+    return `${SHORT_BASE_URL}/${slug}`
   }
 
-  const inferred = pickString(raw, ['domain', 'host', 'baseUrl']);
+  const inferred = pickString(raw, ['domain', 'host', 'baseUrl'])
   if (inferred) {
-    return `${inferred.replace(/\/$/, '')}/${slug}`;
+    return `${inferred.replace(/\/$/, '')}/${slug}`
   }
 
   if (typeof window !== 'undefined' && window.location) {
-    return `${window.location.origin}/${slug}`;
+    return `${window.location.origin}/${slug}`
   }
 
-  return slug;
-};
+  return slug
+}
 
 const parseShortLink = (raw: unknown): ShortLink | null => {
   if (!raw || typeof raw !== 'object') {
-    return null;
+    return null
   }
 
-  const record = raw as Record<string, unknown>;
+  const record = raw as Record<string, unknown>
 
   const slug = pickString(record, [
     'slug',
@@ -207,7 +199,7 @@ const parseShortLink = (raw: unknown): ShortLink | null => {
     'short_id',
     'alias',
     'key',
-  ]);
+  ])
 
   const originalUrl = pickString(record, [
     'originalUrl',
@@ -219,42 +211,37 @@ const parseShortLink = (raw: unknown): ShortLink | null => {
     'url',
     'longUrl',
     'long_url',
-  ]);
+  ])
 
   if (!slug || !originalUrl) {
-    return null;
+    return null
   }
 
-  const id = pickString(record, ['id', 'uuid', 'key', 'slug', 'shortId', 'short_id']) ?? slug;
+  const id = pickString(record, ['id', 'uuid', 'key', 'slug', 'shortId', 'short_id']) ?? slug
 
-  const shortUrl = extractShortUrl(record, slug);
+  const shortUrl = extractShortUrl(record, slug)
 
-  const clicks = pickNumber(record, ['clicks', 'visits', 'usageCount', 'count']);
+  const clicks = pickNumber(record, ['clicks', 'visits', 'usageCount', 'count'])
 
   const createdAt = normaliseDate(
     pickString(record, ['createdAt', 'created_at', 'created', 'createdDate', 'createdTime'])
-  );
+  )
 
-  const expiresAt = normaliseDate(pickString(record, ['expiresAt', 'expires_at', 'expiry', 'expireAt']));
+  const expiresAt = normaliseDate(pickString(record, ['expiresAt', 'expires_at', 'expiry', 'expireAt']))
 
-  return { id, slug, originalUrl, shortUrl, clicks, createdAt, expiresAt };
-};
+  return { id, slug, originalUrl, shortUrl, clicks, createdAt, expiresAt }
+}
 
 export const fetchShortLinks = async (): Promise<ShortLink[]> => {
-  const { data, endpoint } = await tryFetch<unknown>(
-    'GET',
-    KNOWN_LIST_ENDPOINTS,
-    undefined,
-    'list'
-  );
+  const { data, endpoint } = await tryFetch<unknown>('GET', KNOWN_LIST_ENDPOINTS, undefined, 'list')
 
-  endpointCache.set('GET:list', endpoint);
+  endpointCache.set('GET:list', endpoint)
 
   const items: unknown[] = Array.isArray(data)
     ? data
     : typeof data === 'object' && data !== null
       ? (() => {
-          const container = data as Record<string, unknown>;
+          const container = data as Record<string, unknown>
           const possibleCollections = [
             container.items,
             container.urls,
@@ -262,52 +249,50 @@ export const fetchShortLinks = async (): Promise<ShortLink[]> => {
             container.data,
             container.results,
             container.list,
-          ];
+          ]
 
           for (const value of possibleCollections) {
             if (Array.isArray(value)) {
-              return value;
+              return value
             }
           }
 
-          return [] as unknown[];
+          return [] as unknown[]
         })()
-      : [];
+      : []
 
   const parsed = items
     .map((item) => parseShortLink(item))
-    .filter((item): item is ShortLink => Boolean(item));
+    .filter((item): item is ShortLink => Boolean(item))
 
-  return parsed;
-};
+  return parsed
+}
 
 type CreatePayload = {
-  url: string;
-  alias?: string;
-};
+  url: string
+  alias?: string
+}
 
 const createPayloadVariants = (payload: CreatePayload) => {
-  const variants: Record<string, unknown>[] = [];
+  const variants: Record<string, unknown>[] = []
 
-  variants.push({ originalUrl: payload.url, alias: payload.alias });
-  variants.push({ url: payload.url, alias: payload.alias });
-  variants.push({ target: payload.url, alias: payload.alias });
-  variants.push({ longUrl: payload.url, alias: payload.alias });
-  variants.push({ original_url: payload.url, alias: payload.alias });
-  variants.push({ url: payload.url, customAlias: payload.alias });
-  variants.push({ url: payload.url, shortCode: payload.alias });
+  variants.push({ originalUrl: payload.url, alias: payload.alias })
+  variants.push({ url: payload.url, alias: payload.alias })
+  variants.push({ target: payload.url, alias: payload.alias })
+  variants.push({ longUrl: payload.url, alias: payload.alias })
+  variants.push({ original_url: payload.url, alias: payload.alias })
+  variants.push({ url: payload.url, customAlias: payload.alias })
+  variants.push({ url: payload.url, shortCode: payload.alias })
 
-  return variants;
-};
+  return variants
+}
 
-export const createShortLink = async (
-  payload: CreatePayload
-): Promise<ShortLink> => {
-  const variants = createPayloadVariants(payload);
-  let lastError: unknown;
+export const createShortLink = async (payload: CreatePayload): Promise<ShortLink> => {
+  const variants = createPayloadVariants(payload)
+  let lastError: unknown
 
-  const cachedEndpoint = endpointCache.get('POST:create');
-  const endpoints = cachedEndpoint ? [cachedEndpoint] : KNOWN_CREATE_ENDPOINTS;
+  const cachedEndpoint = endpointCache.get('POST:create')
+  const endpoints = cachedEndpoint ? [cachedEndpoint] : KNOWN_CREATE_ENDPOINTS
 
   for (const endpoint of endpoints) {
     for (const variant of variants) {
@@ -316,65 +301,65 @@ export const createShortLink = async (
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(variant),
-        });
+        })
 
         if (!response.ok) {
           if (response.status >= 500) {
-            throw new Error(`Server responded with ${response.status}`);
+            throw new Error(`Server responded with ${response.status}`)
           }
-          continue;
+          continue
         }
 
-        const data = await response.json();
-        const parsed = parseShortLink(data);
+        const data = await response.json()
+        const parsed = parseShortLink(data)
 
         if (!parsed) {
-          throw new Error('Unexpected response format from URL shortener');
+          throw new Error('Unexpected response format from URL shortener')
         }
 
-        endpointCache.set('POST:create', endpoint);
+        endpointCache.set('POST:create', endpoint)
 
-        return parsed;
+        return parsed
       } catch (error) {
-        lastError = error;
+        lastError = error
       }
     }
   }
 
-  throw lastError ?? new Error('Unable to create short link');
-};
+  throw lastError ?? new Error('Unable to create short link')
+}
 
 export const deleteShortLink = async (identifier: string): Promise<void> => {
-  const cachedListEndpoint = endpointCache.get('GET:list');
-  const cachedCreateEndpoint = endpointCache.get('POST:create');
+  const cachedListEndpoint = endpointCache.get('GET:list')
+  const cachedCreateEndpoint = endpointCache.get('POST:create')
 
   const dynamicPatterns = [
     ...(cachedListEndpoint ? [(id: string) => `${cachedListEndpoint}/${id}`] : []),
     ...(cachedCreateEndpoint ? [(id: string) => `${cachedCreateEndpoint}/${id}`] : []),
-  ];
+  ]
 
-  const attempts = [...dynamicPatterns, ...KNOWN_DELETE_PATTERNS];
+  const attempts = [...dynamicPatterns, ...KNOWN_DELETE_PATTERNS]
 
-  let lastError: unknown;
+  let lastError: unknown
 
   for (const buildPath of attempts) {
-    const path = buildPath(identifier);
+    const path = buildPath(identifier)
 
     try {
-      const response = await fetch(buildUrl(path), { method: 'DELETE' });
+      const response = await fetch(buildUrl(path), { method: 'DELETE' })
 
       if (!response.ok) {
         if (response.status >= 500) {
-          throw new Error(`Server responded with ${response.status}`);
+          throw new Error(`Server responded with ${response.status}`)
         }
-        continue;
+        continue
       }
 
-      return;
+      return
     } catch (error) {
-      lastError = error;
+      lastError = error
     }
   }
 
-  throw lastError ?? new Error('Unable to delete short link');
-};
+  throw lastError ?? new Error('Unable to delete short link')
+}
