@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createShortLink, deleteShortLink, fetchShortLinks } from '@/shared/api/url-shortener'
 import type { ShortLink } from '@/entities/short-link'
@@ -29,20 +29,34 @@ export const useShortLinks = (): UseShortLinksResult => {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(() => new Set())
+  const refreshRequestIdRef = useRef(0)
 
   const refresh = useCallback(async () => {
+    const requestId = refreshRequestIdRef.current + 1
+    refreshRequestIdRef.current = requestId
+
     setLoading(true)
     setError(null)
 
     try {
       const data = await fetchShortLinks()
-      setLinks(data)
+
+      if (refreshRequestIdRef.current === requestId) {
+        setLinks(data)
+      }
     } catch (refreshError) {
       console.error(refreshError)
-      setError(refreshError instanceof Error ? refreshError.message : 'Не удалось загрузить ссылки')
+
+      if (refreshRequestIdRef.current === requestId) {
+        setError(
+          refreshError instanceof Error ? refreshError.message : 'Не удалось загрузить ссылки'
+        )
+      }
     } finally {
-      setLoading(false)
+      if (refreshRequestIdRef.current === requestId) {
+        setLoading(false)
+      }
     }
   }, [])
 
@@ -61,13 +75,21 @@ export const useShortLinks = (): UseShortLinksResult => {
   }, [copiedId])
 
   const createLink = useCallback(async (payload: CreatePayload) => {
+    const trimmedUrl = payload.url.trim()
+    const trimmedAlias = payload.alias?.trim()
+
+    if (!trimmedUrl) {
+      setError('Введите ссылку, которую необходимо сократить')
+      return undefined
+    }
+
     setCreating(true)
     setError(null)
 
     try {
       const newLink = await createShortLink({
-        url: payload.url.trim(),
-        alias: payload.alias?.trim() || undefined,
+        url: trimmedUrl,
+        alias: trimmedAlias || undefined,
       })
 
       setLinks((prev) => [newLink, ...prev.filter((item) => item.id !== newLink.id)])

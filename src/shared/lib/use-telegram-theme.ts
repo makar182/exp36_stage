@@ -6,29 +6,48 @@ type Theme = {
   background?: string
 }
 
-const resolveWebAppTheme = (): Theme | undefined => {
-  const theme = window.Telegram?.WebApp?.themeParams
+const normaliseColor = (value?: string) => (value && value.trim().length > 0 ? value : undefined)
 
-  if (!theme) {
+const mapThemeParams = (params?: TelegramThemeParams | null): Theme | undefined => {
+  if (!params) {
     return undefined
   }
 
   return {
-    accentText: theme.button_text_color,
-    accent: theme.button_color,
-    background: theme.bg_color,
+    accentText: normaliseColor(params.button_text_color),
+    accent: normaliseColor(params.button_color),
+    background: normaliseColor(params.bg_color),
   }
 }
+
+const resolveWebAppTheme = (): Theme | undefined => mapThemeParams(window.Telegram?.WebApp?.themeParams)
 
 export const useTelegramTheme = () => {
   const [theme, setTheme] = useState<Theme | undefined>(() => resolveWebAppTheme())
 
   useEffect(() => {
-    if (window.Telegram?.WebApp) {
-      if (typeof window.Telegram.WebApp.ready === 'function') {
-        window.Telegram.WebApp.ready()
-      }
-      setTheme(resolveWebAppTheme())
+    const webApp = window.Telegram?.WebApp
+
+    if (!webApp) {
+      return
+    }
+
+    if (typeof webApp.ready === 'function') {
+      webApp.ready()
+    }
+
+    setTheme(mapThemeParams(webApp.themeParams))
+
+    const handleThemeChange = (params?: TelegramThemeParams) => {
+      const mapped = mapThemeParams(params)
+
+      setTheme(mapped ?? mapThemeParams(webApp.themeParams))
+    }
+
+    webApp.onEvent?.('themeChanged', handleThemeChange)
+
+    return () => {
+      webApp.offEvent?.('themeChanged', handleThemeChange)
     }
   }, [])
 
