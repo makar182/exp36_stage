@@ -7,16 +7,14 @@ export const HomePage = () => {
   const {
     links,
     loading,
+    refreshing,
     creating,
     deleting,
-    error,
     copiedId,
     refresh,
     createLink,
     copyLink,
     deleteLink,
-    resetError,
-    setErrorMessage,
   } = useShortLinks()
 
   return (
@@ -24,16 +22,14 @@ export const HomePage = () => {
       <ShortLinksDashboard
         links={links}
         loading={loading}
+        refreshing={refreshing}
         creating={creating}
         deleting={deleting}
-        error={error}
         copiedId={copiedId}
         onRefresh={refresh}
         onCreate={createLink}
         onCopy={copyLink}
         onDelete={deleteLink}
-        onResetError={resetError}
-        onSetError={setErrorMessage}
       />
     </main>
   )

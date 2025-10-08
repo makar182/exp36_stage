@@ -89,6 +89,12 @@ body {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+.form-error {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #dc2626;
+}
+
 .form-field input:focus {
   border-color: var(--accent-color, #2563eb);
   outline: none;
@@ -297,6 +303,75 @@ body {
   line-height: 1.6;
 }
 
+.notification-center {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  z-index: 1000;
+}
+
+.notification {
+  min-width: 280px;
+  max-width: 360px;
+  padding: 1rem 1.25rem;
+  border-radius: 16px;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.18);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  border: 1px solid transparent;
+  background-color: #ffffff;
+  color: #0f172a;
+}
+
+.notification__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.notification__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.notification__message {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: #475569;
+}
+
+.notification__close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.notification--success {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(187, 247, 208, 0.8);
+}
+
+.notification--error {
+  border-color: rgba(248, 113, 113, 0.5);
+  background: rgba(254, 226, 226, 0.85);
+}
+
+.notification--info {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(219, 234, 254, 0.85);
+}
+
 @media (max-width: 768px) {
   .app {
     padding: 2rem 1rem;
@@ -322,5 +397,12 @@ body {
   .link-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .notification-center {
+    left: 1rem;
+    right: 1rem;
+    top: auto;
+    bottom: 1rem;
   }
 }
