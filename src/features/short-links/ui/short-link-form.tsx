@@ -7,7 +7,7 @@ import {
   normalizeCreateShortLinkInput,
   type CreateShortLinkFormValues,
   type CreateShortLinkInput,
-} from '@/features/short-links'
+} from '../model/create-short-link-schema'
 
 const defaultValues: CreateShortLinkFormValues = {
   url: '',

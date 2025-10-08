@@ -4,7 +4,8 @@ import { useMemo } from 'react'
 import type { ShortLink, ShortLinkId } from '@/entities/short-link'
 import type { CreateShortLinkInput } from '@/features/short-links'
 
-import { ShortLinkForm } from './short-link-form'
+import { ShortLinkForm } from '@/features/short-links'
+
 import { ShortLinksHeader } from './short-links-header'
 import { ShortLinksList } from './short-links-list'
 
