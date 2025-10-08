@@ -1,4 +1,4 @@
-const normaliseDateInput = (value?: string) => {
+const normalizeDateInput = (value?: string) => {
   if (!value) {
     return null
   }
@@ -17,8 +17,8 @@ const formatter = new Intl.DateTimeFormat('ru-RU', {
   timeStyle: 'short',
 })
 
-export const formatDate = (value?: string) => {
-  const date = normaliseDateInput(value)
+export const formatShortLinkDate = (value?: string) => {
+  const date = normalizeDateInput(value)
 
   if (!date) {
     return null

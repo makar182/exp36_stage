@@ -1,163 +1,218 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import { createShortLink, deleteShortLink, fetchShortLinks } from '@/shared/api/url-shortener'
-import type { ShortLink } from '@/entities/short-link'
+import {
+  createShortLink,
+  deleteShortLink,
+  fetchShortLinks,
+  ShortenerApiError,
+} from '@/shared/api/url-shortener'
+import { copyToClipboard } from '@/shared/lib/clipboard'
+import type { ShortLink, ShortLinkId } from '@/entities/short-link'
+import { useNotifications } from '@/shared/notifications'
 
-type CreatePayload = {
-  url: string
-  alias?: string
-}
+import type { CreateShortLinkInput } from './create-short-link-schema'
 
 type UseShortLinksResult = {
   links: ShortLink[]
   loading: boolean
+  refreshing: boolean
   creating: boolean
-  deleting: ReadonlySet<string>
-  error: string | null
-  copiedId: string | null
+  deleting: ReadonlySet<ShortLinkId>
+  copiedId: ShortLinkId | null
   refresh: () => Promise<void>
-  createLink: (payload: CreatePayload) => Promise<ShortLink | undefined>
+  createLink: (payload: CreateShortLinkInput) => Promise<void>
   copyLink: (link: ShortLink) => Promise<void>
   deleteLink: (link: ShortLink) => Promise<void>
-  resetError: () => void
-  setErrorMessage: (message: string) => void
+}
+
+const SHORT_LINKS_QUERY_KEY = ['short-links']
+
+const mapErrorToMessage = (error: unknown, fallback: string) => {
+  if (error instanceof ShortenerApiError) {
+    return error.message || fallback
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return fallback
 }
 
 export const useShortLinks = (): UseShortLinksResult => {
-  const [links, setLinks] = useState<ShortLink[]>([])
-  const [loading, setLoading] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(() => new Set())
-  const refreshRequestIdRef = useRef(0)
+  const queryClient = useQueryClient()
+  const { notify } = useNotifications()
+  const [copiedId, setCopiedId] = useState<ShortLinkId | null>(null)
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<ShortLinkId>>(() => new Set())
 
-  const refresh = useCallback(async () => {
-    const requestId = refreshRequestIdRef.current + 1
-    refreshRequestIdRef.current = requestId
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      const data = await fetchShortLinks()
-
-      if (refreshRequestIdRef.current === requestId) {
-        setLinks(data)
-      }
-    } catch (refreshError) {
-      console.error(refreshError)
-
-      if (refreshRequestIdRef.current === requestId) {
-        setError(
-          refreshError instanceof Error ? refreshError.message : 'Не удалось загрузить ссылки'
-        )
-      }
-    } finally {
-      if (refreshRequestIdRef.current === requestId) {
-        setLoading(false)
-      }
-    }
-  }, [])
+  const { data, isLoading, isFetching, refetch, error } = useQuery<
+    ShortLink[],
+    ShortenerApiError
+  >({
+    queryKey: SHORT_LINKS_QUERY_KEY,
+    queryFn: fetchShortLinks,
+    staleTime: 60_000,
+    retry: 1,
+  })
 
   useEffect(() => {
-    void refresh()
-  }, [refresh])
-
-  useEffect(() => {
-    if (!copiedId) {
+    if (!error) {
       return
     }
 
-    const timeout = setTimeout(() => setCopiedId(null), 2500)
+    notify({
+      kind: 'error',
+      title: 'Не удалось загрузить ссылки',
+      message: mapErrorToMessage(error, 'Попробуйте обновить страницу позднее.'),
+    })
+  }, [error, notify])
 
-    return () => clearTimeout(timeout)
-  }, [copiedId])
+  const links: ShortLink[] = data ?? []
 
-  const createLink = useCallback(async (payload: CreatePayload) => {
-    const trimmedUrl = payload.url.trim()
-    const trimmedAlias = payload.alias?.trim()
-
-    if (!trimmedUrl) {
-      setError('Введите ссылку, которую необходимо сократить')
-      return undefined
+  useEffect(() => {
+    if (!copiedId || typeof window === 'undefined') {
+      return
     }
 
-    setCreating(true)
-    setError(null)
+    const timeout = window.setTimeout(() => setCopiedId(null), 2500)
 
-    try {
-      const newLink = await createShortLink({
-        url: trimmedUrl,
-        alias: trimmedAlias || undefined,
+    return () => window.clearTimeout(timeout)
+  }, [copiedId])
+
+  const creatingMutation = useMutation({
+    mutationFn: (payload: CreateShortLinkInput) => createShortLink(payload),
+    onSuccess: async (newLink) => {
+      queryClient.setQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY, (current = []) => {
+        const filtered = current.filter((item) => item.id !== newLink.id)
+        return [newLink, ...filtered]
       })
 
-      setLinks((prev) => [newLink, ...prev.filter((item) => item.id !== newLink.id)])
       setCopiedId(newLink.id)
 
       try {
-        await navigator.clipboard?.writeText(newLink.shortUrl)
+        await copyToClipboard(newLink.shortUrl)
+        notify({
+          kind: 'success',
+          title: 'Ссылка создана',
+          message: 'Короткая ссылка скопирована в буфер обмена.',
+        })
       } catch (clipboardError) {
-        console.warn('Failed to copy newly created link', clipboardError)
+        notify({
+          kind: 'info',
+          title: 'Ссылка создана',
+          message: mapErrorToMessage(
+            clipboardError,
+            'Скопируйте ссылку вручную — буфер обмена недоступен.',
+          ),
+        })
+      }
+    },
+    onError: (error) => {
+      notify({
+        kind: 'error',
+        title: 'Не удалось создать ссылку',
+        message: mapErrorToMessage(error, 'Проверьте введённые данные и попробуйте снова.'),
+      })
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (link: ShortLink) => deleteShortLink(link.id),
+    onMutate: async (link) => {
+      setDeletingIds((prev) => {
+        const next = new Set(prev)
+        next.add(link.id)
+        return next
+      })
+
+      await queryClient.cancelQueries({ queryKey: SHORT_LINKS_QUERY_KEY })
+
+      const previousLinks = queryClient.getQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY)
+      queryClient.setQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY, (current = []) =>
+        current.filter((item) => item.id !== link.id),
+      )
+
+      return { previousLinks }
+    },
+    onError: (error, _link, context) => {
+      if (context?.previousLinks) {
+        queryClient.setQueryData(SHORT_LINKS_QUERY_KEY, context.previousLinks)
       }
 
-      return newLink
-    } catch (createError) {
-      console.error(createError)
-      setError(createError instanceof Error ? createError.message : 'Не удалось создать короткую ссылку')
-    } finally {
-      setCreating(false)
-    }
-  }, [])
-
-  const copyLink = useCallback(async (link: ShortLink) => {
-    try {
-      await navigator.clipboard?.writeText(link.shortUrl)
-      setCopiedId(link.id)
-    } catch (copyError) {
-      console.error(copyError)
-      setError('Не удалось скопировать ссылку в буфер обмена')
-    }
-  }, [])
-
-  const deleteLink = useCallback(async (link: ShortLink) => {
-    setDeletingIds((prev) => {
-      const next = new Set(prev)
-      next.add(link.id)
-      return next
-    })
-    setError(null)
-
-    try {
-      await deleteShortLink(link.id)
-      setLinks((prev) => prev.filter((item) => item.id !== link.id))
-    } catch (deleteError) {
-      console.error(deleteError)
-      setError(deleteError instanceof Error ? deleteError.message : 'Не удалось удалить ссылку')
-    } finally {
+      notify({
+        kind: 'error',
+        title: 'Не удалось удалить ссылку',
+        message: mapErrorToMessage(error, 'Попробуйте удалить ссылку чуть позже.'),
+      })
+    },
+    onSuccess: () => {
+      notify({
+        kind: 'success',
+        title: 'Ссылка удалена',
+        message: 'Запись успешно удалена из списка.',
+      })
+    },
+    onSettled: (_, __, link) => {
       setDeletingIds((prev) => {
         const next = new Set(prev)
         next.delete(link.id)
         return next
       })
-    }
-  }, [])
+    },
+  })
 
-  const resetError = useCallback(() => setError(null), [])
-  const setErrorMessage = useCallback((message: string) => setError(message), [])
+  const refresh = useCallback(async () => {
+    await refetch()
+  }, [refetch])
+
+  const createLink = useCallback(
+    async (payload: CreateShortLinkInput) => {
+      await creatingMutation.mutateAsync(payload)
+    },
+    [creatingMutation],
+  )
+
+  const copyLink = useCallback(
+    async (link: ShortLink) => {
+      try {
+        await copyToClipboard(link.shortUrl)
+        setCopiedId(link.id)
+        notify({
+          kind: 'success',
+          title: 'Ссылка скопирована',
+          message: 'Короткая ссылка сохранена в буфер обмена.',
+        })
+      } catch (error) {
+        notify({
+          kind: 'error',
+          title: 'Не удалось скопировать ссылку',
+          message: mapErrorToMessage(error, 'Скопируйте ссылку вручную.'),
+        })
+      }
+    },
+    [notify],
+  )
+
+  const deleteLink = useCallback(
+    async (link: ShortLink) => {
+      await deleteMutation.mutateAsync(link)
+    },
+    [deleteMutation],
+  )
+
+  const deleting = useMemo(() => deletingIds, [deletingIds])
 
   return {
     links,
-    loading,
-    creating,
-    deleting: deletingIds,
-    error,
+    loading: isLoading,
+    refreshing: isFetching && !isLoading,
+    creating: creatingMutation.isPending,
+    deleting,
     copiedId,
     refresh,
     createLink,
     copyLink,
     deleteLink,
-    resetError,
-    setErrorMessage,
   }
 }

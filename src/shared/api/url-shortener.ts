@@ -1,18 +1,37 @@
-import type { ShortLink } from '@/entities/short-link'
+import {
+  createShortLinkId,
+  createShortLinkSlug,
+  type ShortLink,
+  type ShortLinkId,
+} from '@/entities/short-link'
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
-const SHORT_BASE_URL = (import.meta.env.VITE_SHORT_BASE_URL ?? '').replace(/\/$/, '')
+const fallbackBase = typeof window === 'undefined' ? 'http://localhost' : window.location.origin
+
+const normalizeBaseUrl = (value?: string): string | null => {
+  if (!value?.trim()) {
+    return null
+  }
+
+  try {
+    const url = new URL(value, fallbackBase)
+    url.hash = ''
+    url.search = ''
+    return url.toString().replace(/\/$/, '')
+  } catch (error) {
+    console.warn('Invalid base URL provided for the shortener API', value, error)
+    return null
+  }
+}
+
+const API_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL)
+const SHORT_BASE_URL = normalizeBaseUrl(import.meta.env.VITE_SHORT_BASE_URL)
 
 const buildUrl = (path: string) => {
   if (!API_BASE_URL) {
-    return path
+    return path.startsWith('/') ? path : `/${path}`
   }
 
-  if (!path.startsWith('/')) {
-    return `${API_BASE_URL}/${path}`
-  }
-
-  return `${API_BASE_URL}${path}`
+  return new URL(path, API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`).toString()
 }
 
 type AliasResponse = {
@@ -46,12 +65,12 @@ const mapShortLink = (alias: AliasResponse): ShortLink => {
   const shortUrl = alias.shortUrl
     ? alias.shortUrl
     : SHORT_BASE_URL
-      ? `${SHORT_BASE_URL}/${alias.alias}`
+      ? new URL(alias.alias, SHORT_BASE_URL.endsWith('/') ? SHORT_BASE_URL : `${SHORT_BASE_URL}/`).toString()
       : alias.alias
 
   return {
-    id: alias.id,
-    slug: alias.alias,
+    id: createShortLinkId(alias.id),
+    slug: createShortLinkSlug(alias.alias),
     originalUrl: alias.url,
     shortUrl,
     createdAt: ensureIsoDate(alias.createdAt),
@@ -60,10 +79,39 @@ const mapShortLink = (alias: AliasResponse): ShortLink => {
   }
 }
 
+type ApiErrorPayload = {
+  message?: string
+  error?: string
+  errors?: unknown
+}
+
+export class ShortenerApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly payload?: ApiErrorPayload,
+  ) {
+    super(message)
+    this.name = 'ShortenerApiError'
+  }
+}
+
 const readJson = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
-    const message = await response.text().catch(() => null)
-    throw new Error(message || `Request failed with status ${response.status}`)
+    let payload: ApiErrorPayload | undefined
+    let message = `Request failed with status ${response.status}`
+
+    try {
+      const text = await response.text()
+      if (text) {
+        payload = JSON.parse(text) as ApiErrorPayload
+        message = payload.message || payload.error || message
+      }
+    } catch (error) {
+      console.warn('Failed to parse API error payload', error)
+    }
+
+    throw new ShortenerApiError(message, response.status, payload)
   }
 
   return (await response.json()) as T
@@ -103,7 +151,7 @@ type UpdatePayload = {
   alias?: string
 }
 
-export const updateShortLink = async (id: string, payload: UpdatePayload): Promise<ShortLink> => {
+export const updateShortLink = async (id: ShortLinkId, payload: UpdatePayload): Promise<ShortLink> => {
   const response = await fetch(buildUrl(`/alias/${encodeURIComponent(id)}`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -114,13 +162,25 @@ export const updateShortLink = async (id: string, payload: UpdatePayload): Promi
   return mapShortLink(data)
 }
 
-export const deleteShortLink = async (id: string): Promise<void> => {
+export const deleteShortLink = async (id: ShortLinkId): Promise<void> => {
   const response = await fetch(buildUrl(`/alias/${encodeURIComponent(id)}`), {
     method: 'DELETE',
   })
 
   if (!response.ok) {
-    const message = await response.text().catch(() => null)
-    throw new Error(message || `Request failed with status ${response.status}`)
+    let payload: ApiErrorPayload | undefined
+    let message = `Request failed with status ${response.status}`
+
+    try {
+      const text = await response.text()
+      if (text) {
+        payload = JSON.parse(text) as ApiErrorPayload
+        message = payload.message || payload.error || message
+      }
+    } catch (error) {
+      console.warn('Failed to parse API error payload', error)
+    }
+
+    throw new ShortenerApiError(message, response.status, payload)
   }
 }
