@@ -1,218 +1,218 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query' // Импортируем хуки React Query для загрузки данных и управления кэшем.
+import { useCallback, useEffect, useMemo, useState } from 'react' // Используем хуки React для мемоизации и побочных эффектов.
 
 import {
-  createShortLink,
-  deleteShortLink,
-  fetchShortLinks,
-  ShortenerApiError,
+  createShortLink, // Функция API, создающая новую короткую ссылку.
+  deleteShortLink, // Функция API, удаляющая существующую короткую ссылку по идентификатору.
+  fetchShortLinks, // Функция API, получающая актуальный список коротких ссылок.
+  ShortenerApiError, // Пользовательский тип ошибки, описывающий сбои бэкенда сокращателя ссылок.
 } from '@/shared/api/url-shortener'
-import { copyToClipboard } from '@/shared/lib/clipboard'
-import type { ShortLink, ShortLinkId } from '@/entities/short-link'
-import { useNotifications } from '@/shared/notifications'
+import { copyToClipboard } from '@/shared/lib/clipboard' // Утилита, записывающая текст в буфер обмена.
+import type { ShortLink, ShortLinkId } from '@/entities/short-link' // Определения типов сущностей коротких ссылок и их идентификаторов.
+import { useNotifications } from '@/shared/notifications' // Хук, предоставляющий доступ к системе уведомлений.
 
-import type { CreateShortLinkInput } from './create-short-link-schema'
+import type { CreateShortLinkInput } from './create-short-link-schema' // Тип входных данных, описывающий payload создания короткой ссылки.
 
-type UseShortLinksResult = {
-  links: ShortLink[]
-  loading: boolean
-  refreshing: boolean
-  creating: boolean
-  deleting: ReadonlySet<ShortLinkId>
-  copiedId: ShortLinkId | null
-  refresh: () => Promise<void>
-  createLink: (payload: CreateShortLinkInput) => Promise<void>
-  copyLink: (link: ShortLink) => Promise<void>
-  deleteLink: (link: ShortLink) => Promise<void>
+type UseShortLinksResult = { // Контракт объекта, который возвращает хук.
+  links: ShortLink[] // Коллекция доступных коротких ссылок.
+  loading: boolean // Показывает состояние первоначальной загрузки списка.
+  refreshing: boolean // Показывает фоновое обновление, когда данные уже загружены.
+  creating: boolean // Показывает, выполняется ли сейчас мутация создания.
+  deleting: ReadonlySet<ShortLinkId> // Содержит идентификаторы ссылок, которые сейчас удаляются.
+  copiedId: ShortLinkId | null // Сохраняет идентификатор ссылки, скопированной в буфер обмена.
+  refresh: () => Promise<void> // Функция ручного обновления ссылок с сервера.
+  createLink: (payload: CreateShortLinkInput) => Promise<void> // Функция, запускающая создание ссылки.
+  copyLink: (link: ShortLink) => Promise<void> // Функция, копирующая ссылку в буфер обмена.
+  deleteLink: (link: ShortLink) => Promise<void> // Функция, удаляющая запись ссылки.
 }
 
-const SHORT_LINKS_QUERY_KEY = ['short-links']
+const SHORT_LINKS_QUERY_KEY = ['short-links'] // Общий ключ запроса для получения списка коротких ссылок.
 
-const mapErrorToMessage = (error: unknown, fallback: string) => {
-  if (error instanceof ShortenerApiError) {
-    return error.message || fallback
+const mapErrorToMessage = (error: unknown, fallback: string) => { // Преобразует неизвестные ошибки в понятные сообщения.
+  if (error instanceof ShortenerApiError) { // Сначала проверяем, не пришла ли знакомая ошибка API.
+    return error.message || fallback // Предпочитаем сообщение сервера либо используем запасное описание.
   }
 
-  if (error instanceof Error) {
-    return error.message
+  if (error instanceof Error) { // Затем обрабатываем обычные ошибки JavaScript.
+    return error.message // Возвращаем исходный текст ошибки.
   }
 
-  return fallback
+  return fallback // Используем запасное сообщение, если тип ошибки неожиданный.
 }
 
-export const useShortLinks = (): UseShortLinksResult => {
-  const queryClient = useQueryClient()
-  const { notify } = useNotifications()
-  const [copiedId, setCopiedId] = useState<ShortLinkId | null>(null)
-  const [deletingIds, setDeletingIds] = useState<ReadonlySet<ShortLinkId>>(() => new Set())
+export const useShortLinks = (): UseShortLinksResult => { // Экспортируем хук, инкапсулирующий всю логику коротких ссылок.
+  const queryClient = useQueryClient() // Получаем клиент React Query для управления обновлением кэша.
+  const { notify } = useNotifications() // Берём функцию notify для показа всплывающих уведомлений.
+  const [copiedId, setCopiedId] = useState<ShortLinkId | null>(null) // Отслеживаем, какая ссылка была скопирована последней.
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<ShortLinkId>>(() => new Set()) // Поддерживаем множество идентификаторов ссылок, удаляемых прямо сейчас.
 
-  const { data, isLoading, isFetching, refetch, error } = useQuery<
-    ShortLink[],
-    ShortenerApiError
+  const { data, isLoading, isFetching, refetch, error } = useQuery< // Выполняем запрос для получения коротких ссылок.
+    ShortLink[], // Указываем тип данных при успешном ответе.
+    ShortenerApiError // Указываем тип ошибки, которую может вернуть запрос.
   >({
-    queryKey: SHORT_LINKS_QUERY_KEY,
-    queryFn: fetchShortLinks,
-    staleTime: 60_000,
-    retry: 1,
+    queryKey: SHORT_LINKS_QUERY_KEY, // Используем постоянный ключ, чтобы другие хуки обращались к той же записи кэша.
+    queryFn: fetchShortLinks, // Передаём функцию, которая получает короткие ссылки из API.
+    staleTime: 60_000, // Считаем данные актуальными одну минуту, прежде чем признавать их устаревшими.
+    retry: 1, // Повторяем запрос один раз при сбое, чтобы покрыть временные проблемы.
   })
 
-  useEffect(() => {
-    if (!error) {
-      return
+  useEffect(() => { // Реагируем на ошибки запроса и показываем их пользователю.
+    if (!error) { // Ничего не делаем, если ошибок нет.
+      return // Выходим заранее, чтобы не отправлять лишнее уведомление.
     }
 
-    notify({
-      kind: 'error',
-      title: 'Не удалось загрузить ссылки',
-      message: mapErrorToMessage(error, 'Попробуйте обновить страницу позднее.'),
+    notify({ // Отправляем уведомление об ошибке, если загрузка не удалась.
+      kind: 'error', // Используем стиль ошибки в интерфейсе уведомлений.
+      title: 'Не удалось загрузить ссылки', // Задаём короткий заголовок, объясняющий сбой.
+      message: mapErrorToMessage(error, 'Попробуйте обновить страницу позднее.'), // Преобразуем ошибку в понятное пользователю описание.
     })
-  }, [error, notify])
+  }, [error, notify]) // Перезапускаем эффект при изменении ошибки или ссылки на функцию уведомления.
 
-  const links: ShortLink[] = data ?? []
+  const links: ShortLink[] = data ?? [] // По умолчанию используем пустой список, если запрос ещё не вернул данные.
 
-  useEffect(() => {
-    if (!copiedId || typeof window === 'undefined') {
-      return
+  useEffect(() => { // Управляем таймером, который сбрасывает индикатор копирования спустя время.
+    if (!copiedId || typeof window === 'undefined') { // Пропускаем обработку, если ничего не скопировано или идёт серверный рендеринг.
+      return // Выходим, не создавая дополнительных очисток.
     }
 
-    const timeout = window.setTimeout(() => setCopiedId(null), 2500)
+    const timeout = window.setTimeout(() => setCopiedId(null), 2500) // Сбрасываем идентификатор скопированной ссылки через 2,5 секунды.
 
-    return () => window.clearTimeout(timeout)
-  }, [copiedId])
+    return () => window.clearTimeout(timeout) // Очищаем таймер при изменении зависимостей.
+  }, [copiedId]) // Перезапускаем эффект при изменении идентификатора скопированной ссылки.
 
-  const creatingMutation = useMutation({
-    mutationFn: (payload: CreateShortLinkInput) => createShortLink(payload),
-    onSuccess: async (newLink) => {
-      queryClient.setQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY, (current = []) => {
-        const filtered = current.filter((item) => item.id !== newLink.id)
-        return [newLink, ...filtered]
+  const creatingMutation = useMutation({ // Настраиваем мутацию, отвечающую за создание коротких ссылок.
+    mutationFn: (payload: CreateShortLinkInput) => createShortLink(payload), // Вызываем API с переданным payload.
+    onSuccess: async (newLink) => { // Обрабатываем успешное создание ссылки.
+      queryClient.setQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY, (current = []) => { // Обновляем кэшированный список новой записью.
+        const filtered = current.filter((item) => item.id !== newLink.id) // Удаляем устаревшие записи с тем же идентификатором.
+        return [newLink, ...filtered] // Помещаем свежесозданную ссылку в начало списка.
       })
 
-      setCopiedId(newLink.id)
+      setCopiedId(newLink.id) // Помечаем новую ссылку как скопированную для обратной связи в UI.
 
-      try {
-        await copyToClipboard(newLink.shortUrl)
-        notify({
-          kind: 'success',
-          title: 'Ссылка создана',
-          message: 'Короткая ссылка скопирована в буфер обмена.',
+      try { // Пробуем автоматически скопировать получившийся короткий URL.
+        await copyToClipboard(newLink.shortUrl) // Копируем текст короткой ссылки в буфер обмена.
+        notify({ // Сообщаем пользователю об успешном результате.
+          kind: 'success', // Оформляем уведомление как успешное.
+          title: 'Ссылка создана', // Добавляем заголовок, говорящий об успешном создании.
+          message: 'Короткая ссылка скопирована в буфер обмена.', // Поясняем, что ссылка уже скопирована.
         })
-      } catch (clipboardError) {
-        notify({
-          kind: 'info',
-          title: 'Ссылка создана',
-          message: mapErrorToMessage(
+      } catch (clipboardError) { // Аккуратно обрабатываем сбои при работе с буфером обмена.
+        notify({ // Показываем запасное уведомление, если копирование не удалось.
+          kind: 'info', // Выбираем информационный тон, потому что ссылка всё равно создана.
+          title: 'Ссылка создана', // Повторно используем успешный заголовок, подчёркивая создание.
+          message: mapErrorToMessage( // Преобразуем ошибку буфера обмена в понятный совет.
             clipboardError,
             'Скопируйте ссылку вручную — буфер обмена недоступен.',
           ),
         })
       }
     },
-    onError: (error) => {
-      notify({
-        kind: 'error',
-        title: 'Не удалось создать ссылку',
-        message: mapErrorToMessage(error, 'Проверьте введённые данные и попробуйте снова.'),
+    onError: (error) => { // Обрабатываем ошибки, возникшие при создании ссылки.
+      notify({ // Уведомляем пользователя о неудаче.
+        kind: 'error', // Показываем уведомление в оформлении ошибки.
+        title: 'Не удалось создать ссылку', // Сообщаем, что создать ссылку не удалось.
+        message: mapErrorToMessage(error, 'Проверьте введённые данные и попробуйте снова.'), // Предлагаем следующее действие через подобранное сообщение.
       })
     },
   })
 
-  const deleteMutation = useMutation({
-    mutationFn: (link: ShortLink) => deleteShortLink(link.id),
-    onMutate: async (link) => {
-      setDeletingIds((prev) => {
-        const next = new Set(prev)
-        next.add(link.id)
-        return next
+  const deleteMutation = useMutation({ // Настраиваем мутацию, удаляющую короткие ссылки.
+    mutationFn: (link: ShortLink) => deleteShortLink(link.id), // Вызываем API для удаления ссылки по идентификатору.
+    onMutate: async (link) => { // Оптимистично обновляем состояние до завершения запроса.
+      setDeletingIds((prev) => { // Запоминаем идентификатор ссылки, которую удаляем.
+        const next = new Set(prev) // Клонируем текущее множество, чтобы сохранить неизменяемость.
+        next.add(link.id) // Добавляем идентификатор в множество ожидающих удаления.
+        return next // Возвращаем обновлённое множество для установки состояния.
       })
 
-      await queryClient.cancelQueries({ queryKey: SHORT_LINKS_QUERY_KEY })
+      await queryClient.cancelQueries({ queryKey: SHORT_LINKS_QUERY_KEY }) // Приостанавливаем параллельные запросы с тем же ключом.
 
-      const previousLinks = queryClient.getQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY)
-      queryClient.setQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY, (current = []) =>
-        current.filter((item) => item.id !== link.id),
+      const previousLinks = queryClient.getQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY) // Делаем снимок текущего списка для возможного отката.
+      queryClient.setQueryData<ShortLink[]>(SHORT_LINKS_QUERY_KEY, (current = []) => // Оптимистично убираем удаляемый элемент.
+        current.filter((item) => item.id !== link.id), // Отфильтровываем ссылку, которую удаляем.
       )
 
-      return { previousLinks }
+      return { previousLinks } // Передаём снимок в onError, чтобы можно было восстановить данные.
     },
-    onError: (error, _link, context) => {
-      if (context?.previousLinks) {
-        queryClient.setQueryData(SHORT_LINKS_QUERY_KEY, context.previousLinks)
+    onError: (error, _link, context) => { // Обрабатываем ошибки удаления.
+      if (context?.previousLinks) { // Восстанавливаем кэш, если есть сохранённый снимок.
+        queryClient.setQueryData(SHORT_LINKS_QUERY_KEY, context.previousLinks) // Возвращаем кэш к предыдущему состоянию.
       }
 
-      notify({
-        kind: 'error',
-        title: 'Не удалось удалить ссылку',
-        message: mapErrorToMessage(error, 'Попробуйте удалить ссылку чуть позже.'),
+      notify({ // Сообщаем пользователю, что удалить ссылку не получилось.
+        kind: 'error', // Показываем уведомление как ошибку.
+        title: 'Не удалось удалить ссылку', // Добавляем поясняющий заголовок.
+        message: mapErrorToMessage(error, 'Попробуйте удалить ссылку чуть позже.'), // Советуем повторить попытку позже и даём подробности ошибки.
       })
     },
-    onSuccess: () => {
-      notify({
-        kind: 'success',
-        title: 'Ссылка удалена',
-        message: 'Запись успешно удалена из списка.',
+    onSuccess: () => { // Реагируем на успешное удаление.
+      notify({ // Уведомляем пользователя, что ссылка удалена.
+        kind: 'success', // Оформляем уведомление как успешное.
+        title: 'Ссылка удалена', // Задаём заголовок, подводящий итог.
+        message: 'Запись успешно удалена из списка.', // Подтверждаем, что список обновлён.
       })
     },
-    onSettled: (_, __, link) => {
-      setDeletingIds((prev) => {
-        const next = new Set(prev)
-        next.delete(link.id)
-        return next
+    onSettled: (_, __, link) => { // Очищаем состояние удаления вне зависимости от результата.
+      setDeletingIds((prev) => { // Удаляем идентификатор из отслеживаемого множества.
+        const next = new Set(prev) // Клонируем предыдущее множество для неизменяемости.
+        next.delete(link.id) // Убираем завершённый идентификатор из множества.
+        return next // Обновляем состояние очищенным множеством.
       })
     },
   })
 
-  const refresh = useCallback(async () => {
-    await refetch()
-  }, [refetch])
+  const refresh = useCallback(async () => { // Предоставляем помощник, который обновляет список по запросу.
+    await refetch() // Ждём завершения refetch, чтобы прокинуть ошибки вызывающему коду.
+  }, [refetch]) // Пересоздаём колбэк только при изменении ссылки на функцию refetch.
 
-  const createLink = useCallback(
+  const createLink = useCallback( // Оборачиваем обработчик создания в useCallback для стабильной ссылки.
     async (payload: CreateShortLinkInput) => {
-      await creatingMutation.mutateAsync(payload)
+      await creatingMutation.mutateAsync(payload) // Запускаем мутацию создания с переданными данными.
     },
-    [creatingMutation],
+    [creatingMutation], // Пересоздаём колбэк при изменении экземпляра мутации.
   )
 
-  const copyLink = useCallback(
+  const copyLink = useCallback( // Предоставляем мемоизированный помощник для копирования коротких ссылок.
     async (link: ShortLink) => {
       try {
-        await copyToClipboard(link.shortUrl)
-        setCopiedId(link.id)
-        notify({
-          kind: 'success',
-          title: 'Ссылка скопирована',
-          message: 'Короткая ссылка сохранена в буфер обмена.',
+        await copyToClipboard(link.shortUrl) // Пробуем скопировать короткий URL ссылки.
+        setCopiedId(link.id) // Запоминаем, какая ссылка скопирована, чтобы подсветить её в интерфейсе.
+        notify({ // Сообщаем пользователю, что копирование прошло успешно.
+          kind: 'success', // Показываем уведомление в успешном стиле.
+          title: 'Ссылка скопирована', // Задаём заголовок, описывающий действие копирования.
+          message: 'Короткая ссылка сохранена в буфер обмена.', // Уточняем, что в буфере обмена уже лежит нужный URL.
         })
-      } catch (error) {
-        notify({
-          kind: 'error',
-          title: 'Не удалось скопировать ссылку',
-          message: mapErrorToMessage(error, 'Скопируйте ссылку вручную.'),
+      } catch (error) { // Аккуратно обрабатываем сбои при работе с буфером обмена.
+        notify({ // Сообщаем пользователю, что скопировать не удалось.
+          kind: 'error', // Используем оформление ошибки, чтобы показать проблему.
+          title: 'Не удалось скопировать ссылку', // Даём заголовок, объясняющий неудачу.
+          message: mapErrorToMessage(error, 'Скопируйте ссылку вручную.'), // Даём подсказку по ручному копированию.
         })
       }
     },
-    [notify],
+    [notify], // Пересоздаём колбэк только при изменении ссылки на notify.
   )
 
-  const deleteLink = useCallback(
+  const deleteLink = useCallback( // Мемоизируем помощник удаления для стабильных пропсов ниже по дереву.
     async (link: ShortLink) => {
-      await deleteMutation.mutateAsync(link)
+      await deleteMutation.mutateAsync(link) // Запускаем мутацию удаления для выбранной ссылки.
     },
-    [deleteMutation],
+    [deleteMutation], // Пересчитываем колбэк при обновлении экземпляра мутации.
   )
 
-  const deleting = useMemo(() => deletingIds, [deletingIds])
+  const deleting = useMemo(() => deletingIds, [deletingIds]) // Возвращаем множество удаляемых идентификаторов, сохраняя ссылочную стабильность.
 
-  return {
-    links,
-    loading: isLoading,
-    refreshing: isFetching && !isLoading,
-    creating: creatingMutation.isPending,
-    deleting,
-    copiedId,
-    refresh,
-    createLink,
-    copyLink,
-    deleteLink,
+  return { // Возвращаем полный API хука для потребителей.
+    links, // Передаём текущие загруженные ссылки.
+    loading: isLoading, // Сообщаем, выполняется ли начальная загрузка.
+    refreshing: isFetching && !isLoading, // Показываем фоновое обновление данных, исключая первый запрос.
+    creating: creatingMutation.isPending, // Показываем, активен ли запрос создания.
+    deleting, // Предоставляем множество идентификаторов удаляемых ссылок для UI.
+    copiedId, // Передаём идентификатор последней скопированной ссылки для подсветки.
+    refresh, // Передаём функцию ручного обновления.
+    createLink, // Передаём обработчик создания для форм.
+    copyLink, // Передаём помощник копирования для кнопок действий.
+    deleteLink, // Передаём помощник удаления для кнопок действий.
   }
 }

@@ -1,29 +1,29 @@
-:root {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color: #1f2a37;
-  background-color: #f2f5fb;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+:root { /* Задаём базовые типографику и цвета для всего приложения. */
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; /* Отдаём предпочтение Inter с системными шрифтами для ровного рендеринга. */
+  line-height: 1.5; /* Устанавливаем комфортную межстрочную величину для чтения. */
+  font-weight: 400; /* Используем обычное начертание в качестве базового. */
+  color: #1f2a37; /* Определяем основной тёмный цвет текста. */
+  background-color: #f2f5fb; /* Применяем светлый фон с голубым оттенком ко всему приложению. */
+  font-synthesis: none; /* Отключаем автоматическое синтезирование начертаний ради качества типографики. */
+  text-rendering: optimizeLegibility; /* Просим браузер отдавать приоритет читабельности основного текста. */
+  -webkit-font-smoothing: antialiased; /* Улучшаем отображение шрифтов в браузерах на WebKit. */
+  -moz-osx-font-smoothing: grayscale; /* Повышаем качество рендеринга шрифтов в Firefox на macOS. */
+} /* Завершаем блок объявления :root. */
 
-*, *::before, *::after {
-  box-sizing: border-box;
-}
+*, *::before, *::after { /* Применяем единый box-sizing ко всем элементам и псевдоэлементам. */
+  box-sizing: border-box; /* Включаем отступы и границы в расчёт ширины элементов. */
+} /* Завершение универсального селектора. */
 
-body {
-  margin: 0;
-  min-height: 100vh;
-  background-color: #f2f5fb;
-}
+body { /* Нормализуем базовые параметры разметки body. */
+  margin: 0; /* Убираем стандартные отступы body, чтобы избежать лишнего пространства. */
+  min-height: 100vh; /* Растягиваем body на всю высоту окна. */
+  background-color: #f2f5fb; /* Дублируем фон из :root для цельного вида. */
+} /* Завершаем описание body. */
 
-#root {
-  min-height: 100vh;
-}
+#root { /* Стилизуем контейнер, в который монтируется React. */
+  min-height: 100vh; /* Позволяем корневому элементу занимать всю высоту окна для flex-лейаутов. */
+} /* Завершаем стилизацию #root. */
 
-a {
-  color: inherit;
-}
+a { /* Настраиваем внешний вид ссылок. */
+  color: inherit; /* Наследуем цвет текста, чтобы убрать стандартный синий оттенок. */
+} /* Завершение правил для ссылок. */

@@ -1,7 +1,7 @@
-import './styles/app.css'
+import './styles/app.css' // Подключаем стили компонента для корневой оболочки приложения.
 
-import { HomePage } from '@/pages/home'
+import { HomePage } from '@/pages/home' // Импортируем главную страницу, представляющую основной сценарий.
 
-export const App = () => {
-  return <HomePage />
+export const App = () => { // Объявляем верхнеуровневый компонент приложения как функциональный.
+  return <HomePage /> // Рендерим главную страницу напрямую, так как роутинг ещё не внедрён.
 }
