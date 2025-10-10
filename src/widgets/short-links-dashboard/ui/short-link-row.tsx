@@ -1,14 +1,14 @@
-import type { FC } from 'react'
+import type { FC } from 'react' // Импортируем тип функционального компонента для типизации.
 
-import type { ShortLink, ShortLinkId } from '@/entities/short-link'
-import { formatShortLinkDate } from '@/entities/short-link'
+import type { ShortLink, ShortLinkId } from '@/entities/short-link' // Подключаем типы сущности короткой ссылки.
+import { formatShortLinkDate } from '@/entities/short-link' // Берём утилиту форматирования дат ссылки.
 
 type ShortLinkRowProps = {
-  link: ShortLink
-  copiedId: ShortLinkId | null
-  deleting: ReadonlySet<ShortLinkId>
-  onCopy: (link: ShortLink) => Promise<void>
-  onDelete: (link: ShortLink) => Promise<void>
+  link: ShortLink // Экземпляр короткой ссылки для отображения.
+  copiedId: ShortLinkId | null // Идентификатор скопированной ссылки либо null.
+  deleting: ReadonlySet<ShortLinkId> // Набор идентификаторов ссылок, находящихся в удалении.
+  onCopy: (link: ShortLink) => Promise<void> // Коллбэк для копирования ссылки.
+  onDelete: (link: ShortLink) => Promise<void> // Обработчик удаления текущей строки.
 }
 
 export const ShortLinkRow: FC<ShortLinkRowProps> = ({
@@ -18,18 +18,18 @@ export const ShortLinkRow: FC<ShortLinkRowProps> = ({
   onCopy,
   onDelete,
 }) => {
-  const createdAt = formatShortLinkDate(link.createdAt)
-  const expiresAt = formatShortLinkDate(link.expiresAt)
-  const isDeleting = deleting.has(link.id)
-  const isCopied = copiedId === link.id
+  const createdAt = formatShortLinkDate(link.createdAt) // Форматируем дату создания ссылки.
+  const expiresAt = formatShortLinkDate(link.expiresAt) // Подготавливаем дату истечения срока действия.
+  const isDeleting = deleting.has(link.id) // Проверяем, удаляется ли сейчас эта ссылка.
+  const isCopied = copiedId === link.id // Определяем, совпадает ли ссылка с последней скопированной.
 
   return (
-    <li className="link-item">
-      <div className="link-top-row">
+    <li className="link-item">{/* Обёртка одной строки списка коротких ссылок. */}
+      <div className="link-top-row">{/* Верхняя строка с коротким URL и действиями. */}
         <a href={link.shortUrl} target="_blank" rel="noreferrer" className="link-short">
           {link.shortUrl}
         </a>
-        <div className="link-actions">
+        <div className="link-actions">{/* Контейнер кнопок действий. */}
           <button
             type="button"
             className="ghost-button"
@@ -51,7 +51,7 @@ export const ShortLinkRow: FC<ShortLinkRowProps> = ({
       <div className="link-original" title={link.originalUrl}>
         {link.originalUrl}
       </div>
-      <div className="link-meta">
+      <div className="link-meta">{/* Дополнительные характеристики короткой ссылки. */}
         {createdAt && <span>Создано: {createdAt}</span>}
         {expiresAt && <span>Истекает: {expiresAt}</span>}
         {typeof link.clicks === 'number' && <span>Переходы: {link.clicks}</span>}
