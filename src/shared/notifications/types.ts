@@ -1,11 +1,11 @@
-export type NotificationKind = 'info' | 'success' | 'error'
+export type NotificationKind = 'info' | 'success' | 'error' // Поддерживаемые визуальные варианты уведомлений.
 
-export type Notification = {
-  id: string
-  kind: NotificationKind
-  title?: string
-  message: string
-  autoClose?: number
+export type Notification = { // Структура, описывающая отображаемое уведомление.
+  id: string // Уникальный идентификатор для отслеживания и удаления.
+  kind: NotificationKind // Вариант, определяющий оформление уведомления.
+  title?: string // Необязательный заголовок над текстом сообщения.
+  message: string // Основной текст, который увидит пользователь.
+  autoClose?: number // Необязательный таймаут в миллисекундах до автоудаления.
 }
 
-export type NotifyOptions = Omit<Notification, 'id'> & { id?: string }
+export type NotifyOptions = Omit<Notification, 'id'> & { id?: string } // Опции при постановке уведомления в очередь, допускающие свой идентификатор.
