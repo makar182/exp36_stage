@@ -1,40 +1,40 @@
-import { z } from 'zod'
+import { z } from 'zod' // Импортируем Zod, чтобы описывать и применять правила валидации.
 
-const aliasRegex = /^[a-zA-Z0-9-_]+$/
+const aliasRegex = /^[a-zA-Z0-9-_]+$/ // Разрешаем в пользовательских алиасах только латиницу, цифры, дефис и подчёркивание.
 
-export const createShortLinkSchema = z.object({
+export const createShortLinkSchema = z.object({ // Строим схему валидации для формы создания ссылки.
   url: z
-    .string({ required_error: 'Введите ссылку, которую необходимо сократить' })
-    .trim()
-    .min(1, 'Введите ссылку, которую необходимо сократить')
-    .url('Введите корректный URL'),
+    .string({ required_error: 'Введите ссылку, которую необходимо сократить' }) // Требуем строковое значение и показываем локализованную ошибку.
+    .trim() // Убираем пробелы по краям значения.
+    .min(1, 'Введите ссылку, которую необходимо сократить') // Проверяем, что поле не пустое после обрезки пробелов.
+    .url('Введите корректный URL'), // Убеждаемся, что введена корректная ссылка.
   alias: z
-    .string()
-    .trim()
-    .max(64, 'Алиас должен быть не длиннее 64 символов')
-    .regex(aliasRegex, 'Допустимы только буквы латиницы, цифры, дефис и нижнее подчёркивание')
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
+    .string() // Принимаем строку в качестве значения необязательного алиаса.
+    .trim() // Нормализуем пробелы вокруг алиаса.
+    .max(64, 'Алиас должен быть не длиннее 64 символов') // Не допускаем значения длиной более 64 символов.
+    .regex(aliasRegex, 'Допустимы только буквы латиницы, цифры, дефис и нижнее подчёркивание') // Ограничиваем набор разрешённых символов.
+    .optional() // Делаем поле алиаса необязательным.
+    .or(z.literal('').transform(() => undefined)), // Пустые строки преобразуем в undefined, чтобы проще формировать payload.
 })
 
-export type CreateShortLinkFormValues = z.input<typeof createShortLinkSchema>
+export type CreateShortLinkFormValues = z.input<typeof createShortLinkSchema> // Тип значений формы, полученный напрямую из схемы.
 
-export type CreateShortLinkInput = {
-  url: string
-  alias?: string
+export type CreateShortLinkInput = { // Нормализованный payload, который ожидает API.
+  url: string // Обязательная исходная ссылка, которую нужно сократить.
+  alias?: string // Необязательный пользовательский алиас.
 }
 
-export const normalizeCreateShortLinkInput = (
+export const normalizeCreateShortLinkInput = ( // Нормализуем сырые значения формы в payload для API.
   values: CreateShortLinkFormValues,
 ): CreateShortLinkInput => {
-  const parsed = createShortLinkSchema.parse(values)
-  const url = parsed.url.trim()
-  const alias = parsed.alias?.trim()
+  const parsed = createShortLinkSchema.parse(values) // Валидируем и приводим значения с помощью схемы.
+  const url = parsed.url.trim() // Убеждаемся, что у ссылки нет пробелов по краям.
+  const alias = parsed.alias?.trim() // При необходимости обрезаем пробелы у алиаса.
 
   return alias
-    ? {
+    ? { // Если алиас указан, включаем его в payload.
         url,
         alias,
       }
-    : { url }
+    : { url } // Иначе отправляем только ссылку.
 }

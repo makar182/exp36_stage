@@ -1,35 +1,35 @@
-import { ShortLinksDashboard } from '@/widgets/short-links-dashboard'
-import { useShortLinks } from '@/features/short-links'
-import { useTelegramTheme } from '@/shared/lib/use-telegram-theme'
+import { ShortLinksDashboard } from '@/widgets/short-links-dashboard' // Импортируем виджет дашборда, отображающий весь сценарий работы с короткими ссылками.
+import { useShortLinks } from '@/features/short-links' // Подключаем хук фичи, управляющий состоянием и мутациями ссылок.
+import { useTelegramTheme } from '@/shared/lib/use-telegram-theme' // Получаем данные темы Telegram для динамического оформления страницы.
 
-export const HomePage = () => {
-  const { accentStyle } = useTelegramTheme()
-  const {
-    links,
-    loading,
-    refreshing,
-    creating,
-    deleting,
-    copiedId,
-    refresh,
-    createLink,
-    copyLink,
-    deleteLink,
+export const HomePage = () => { // Описываем основной компонент главной страницы.
+  const { accentStyle } = useTelegramTheme() // Получаем инлайновые стили с акцентными цветами из окружения Telegram.
+  const { // Деструктурируем состояние и обработчики управления короткими ссылками.
+    links, // Коллекция ссылок, которую нужно отобразить.
+    loading, // Флаг первоначальной загрузки.
+    refreshing, // Флаг фонового обновления данных.
+    creating, // Флаг выполнения запроса на создание ссылки.
+    deleting, // Множество идентификаторов ссылок, которые сейчас удаляются.
+    copiedId, // Идентификатор ссылки, недавно скопированной в буфер обмена.
+    refresh, // Обработчик для повторной загрузки списка.
+    createLink, // Обработчик, создающий новую короткую ссылку из данных пользователя.
+    copyLink, // Обработчик, копирующий короткую ссылку в буфер обмена.
+    deleteLink, // Обработчик, удаляющий ссылку из списка.
   } = useShortLinks()
 
-  return (
-    <main className="app" style={accentStyle}>
+  return ( // Рендерим макет страницы.
+    <main className="app" style={accentStyle}> {/* Применяем акцентные стили темы к внешнему контейнеру. */}
       <ShortLinksDashboard
-        links={links}
-        loading={loading}
-        refreshing={refreshing}
-        creating={creating}
-        deleting={deleting}
-        copiedId={copiedId}
-        onRefresh={refresh}
-        onCreate={createLink}
-        onCopy={copyLink}
-        onDelete={deleteLink}
+        links={links} // Передаём в дашборд актуальный список коротких ссылок.
+        loading={loading} // Сообщаем, нужно ли показывать состояние первичной загрузки.
+        refreshing={refreshing} // Сигнализируем о фоновом обновлении для тонких UI-эффектов.
+        creating={creating} // Передаём признак активной отправки формы создания.
+        deleting={deleting} // Передаём множество ссылок, которые удаляются прямо сейчас.
+        copiedId={copiedId} // Подсвечиваем ссылку, которую пользователь недавно скопировал.
+        onRefresh={refresh} // Позволяем дашборду инициировать повторный запрос.
+        onCreate={createLink} // Передаём колбэк для создания новой ссылки.
+        onCopy={copyLink} // Передаём колбэк для копирования ссылки в буфер обмена.
+        onDelete={deleteLink} // Передаём колбэк для удаления ссылки из списка.
       />
     </main>
   )
